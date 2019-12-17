@@ -7,7 +7,7 @@ echo "Setting up Tasks Development Environment in project tasks-dev"
 oc policy add-role-to-user edit system:serviceaccount:cicd-admin:jenkins -n tasks-dev
 
 # Set up Dev Application
-oc new-build --binary=true --name="tasks" --image-stream=openshift/jboss-eap72-openshift:latest -n tasks-dev
+oc new-build --binary=true --name="tasks" --image-stream=openshift/jboss-eap72-openshift:1.2 -n tasks-dev
 oc new-app tasks-dev/tasks:0.0-0 --name=tasks --allow-missing-imagestream-tags=true -n tasks-dev
 oc set triggers dc/tasks --remove-all -n tasks-dev
 oc expose dc tasks --port 8080 -n tasks-dev
