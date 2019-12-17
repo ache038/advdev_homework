@@ -15,7 +15,7 @@ podTemplate(
 	volumes: [
 	  persistentVolumeClaim(
 	    mountPath: "/home/jenkins/.m2/repository/",
-		claimName: "maven-slave-pvc"
+		claimName: "maven-slave-pvc",
 		readOnly: "false"
 	  )
 	]
