@@ -6,7 +6,7 @@ podTemplate(
   containers: [
     containerTemplate(
       name: "jnlp",
-      image: "docker-registry.default.svc:5000/${GUID}-jenkins/jenkins-agent-appdev",
+      image: "docker-registry.default.svc:5000/cicd-admin/jenkins-agent-appdev",
       resourceRequestMemory: "1Gi",
       resourceLimitMemory: "2Gi",
       resourceRequestCpu: "200m",
@@ -49,20 +49,20 @@ podTemplate(
       }
 
       // TBD: The next two stages should run in parallel
-      stage('Parallel Stage') {
-        parallel 'unitTests': {
-              stage('maven Tests') {
-                  echo 'This stage runs automated unit tests'
-                  sh "${mvnCmd} test"
-                  step([$class: 'JUnitResultArchiver', testResults: '**/target/surefire-reports/TEST-*.xml'])
-              }
-          }, 'sonarAnalysis': {
-              stage('sonar Analysis') {
-                  echo "Running Code Analysis"
-                  sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.gpte-hw-cicd.svc.cluster.local:9000 -DskipTests=true"
-              }
-          }, failFast: true
-      }
+//      stage('Parallel Stage') {
+//        parallel 'unitTests': {
+//              stage('maven Tests') {
+//                  echo 'This stage runs automated unit tests'
+//                  sh "${mvnCmd} test"
+//                  step([$class: 'JUnitResultArchiver', testResults: '**/target/surefire-reports/TEST-*.xml'])
+//              }
+//          }, 'sonarAnalysis': {
+//              stage('sonar Analysis') {
+//                  echo "Running Code Analysis"
+//                  sh "${mvnCmd} sonar:sonar -Dsonar.host.url=http://sonarqube.gpte-hw-cicd.svc.cluster.local:9000 -DskipTests=true"
+//              }
+//          }, failFast: true
+//      }
 
 
       // Publish the built war file to Nexus
@@ -70,7 +70,7 @@ podTemplate(
         echo "Publish to Nexus"
 
         // TBD: Publish to Nexus
-        sh "${mvnCmd} deploy -DskipTests=true -DaltDeploymentRepository=nexus::default::http://nexus3.gpte-hw-cicd.svc.cluster.local:8081/repository/releases"
+        sh "${mvnCmd} deploy -DskipTests=true -DaltDeploymentRepository=nexus::default::http://nexus.cicd-admin.svc:8081/repository/releases"
       }
 
       // Build the OpenShift Image in OpenShift and tag it.
@@ -81,7 +81,7 @@ podTemplate(
         sh "cp target/openshift-tasks.war target/ROOT.war"
         script {
             openshift.withCluster() {
-                openshift.withProject("${GUID}-tasks-dev") {
+                openshift.withProject("tasks-dev") {
                     openshift.selector("bc", "tasks").startBuild("--from-file=target/openshift-tasks.war", "--wait=true")
                     openshift.tag("tasks:latest", "tasks:${devTag}")
 
@@ -100,9 +100,9 @@ podTemplate(
         script {
           // Update the Image on the Development Deployment Config
           openshift.withCluster() {
-            openshift.withProject("${GUID}-tasks-dev") {
+            openshift.withProject("tasks-dev") {
 
-              openshift.set("image", "dc/tasks", "tasks=docker-registry.default.svc:5000/${GUID}-tasks-dev/tasks:${devTag}")
+              openshift.set("image", "dc/tasks", "tasks=docker-registry.default.svc:5000/tasks-dev/tasks:${devTag}")
 
               // Update the Config Map which contains the users for the Tasks application
               // (just in case the properties files changed in the latest commit)
@@ -133,12 +133,12 @@ podTemplate(
         echo "Copy image to Nexus container registry"
 
         // TBD: Copy image to Nexus container registry
-       sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:redhat docker://docker-registry.default.svc.cluster.local:5000/${GUID}-tasks-dev/tasks:${devTag} docker://nexus3-registry.gpte-hw-cicd.svc.cluster.local:5000/tasks:${devTag}"
+       sh "skopeo copy --src-tls-verify=false --dest-tls-verify=false --src-creds openshift:\$(oc whoami -t) --dest-creds admin:YWRtaW46THA2czlsQnlDN1gvdG9Dc3Zua1FtdkJsR0hCdTdCczgxaXRFTXZocVZOUEFaTnlUamRocDlXbW1DdFpBZjl3dA== docker://docker-registry.default.svc.cluster.local:5000/tasks-dev/tasks:${devTag} docker://registry.example.com:8443/admin/tasks:${devTag}"
 
         // TBD: Tag the built image with the production tag.
         openshift.withCluster() {
-          openshift.withProject("${GUID}-tasks-prod") {
-            openshift.tag("${GUID}-tasks-dev/tasks:${devTag}", "${GUID}-tasks-dev/tasks:${prodTag}")
+          openshift.withProject("tasks-prod") {
+            openshift.tag("tasks-dev/tasks:${devTag}", "tasks-dev/tasks:${prodTag}")
           }
         }
       }
@@ -155,7 +155,7 @@ podTemplate(
         //      Make sure the application is running and ready before proceeding
         script {
           openshift.withCluster() {
-            openshift.withProject("${GUID}-tasks-prod") {
+            openshift.withProject("tasks-prod") {
               activeApp = openshift.selector("route", "tasks").object().spec.to.name
               if (activeApp == "tasks-green") {
                 destApp = "tasks-blue"
@@ -165,7 +165,7 @@ podTemplate(
 
               // Update the Image on the Production Deployment Config
               def dc = openshift.selector("dc/${destApp}").object()
-              dc.spec.template.spec.containers[0].image="docker-registry.default.svc:5000/${GUID}-tasks-dev/tasks:${prodTag}"
+              dc.spec.template.spec.containers[0].image="docker-registry.default.svc:5000/tasks-dev/tasks:${prodTag}"
 
               openshift.apply(dc)
 
@@ -196,7 +196,7 @@ podTemplate(
         //input "Switch Production?"
         script {
           openshift.withCluster() {
-            openshift.withProject("${GUID}-tasks-prod") {
+            openshift.withProject("tasks-prod") {
               def route = openshift.selector("route/tasks").object()
               route.spec.to.name="${destApp}"
               openshift.apply(route)
