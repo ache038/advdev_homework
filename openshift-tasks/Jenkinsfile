@@ -11,7 +11,14 @@ podTemplate(
       resourceLimitMemory: "2Gi",
       resourceRequestCpu: "200m",
       resourceLimitCpu: "2"
-    )
+    ),
+	volumes: [
+	  persistentVolumeClaim(
+	    mountPath: "/home/jenkins/.m2/repository/",
+		claimName: "maven-slave-pvc"
+		readOnly: "false"
+	  )
+	]
   ]
 ) {
   node('skopeo-pod') {
